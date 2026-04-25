@@ -1,0 +1,19 @@
+bin/
+obj/
+.vs/
+.idea/
+.vscode/
+TestResults/
+.DS_Store
+
+# unpublished working notes
+.codex
+*_PROMPT.txt
+docs/
+src/MerchantDiscountMod/README.md
+
+# local game paths
+src/MerchantDiscountMod/local.props
+
+# build and release artifacts are published through GitHub Releases
+dist/

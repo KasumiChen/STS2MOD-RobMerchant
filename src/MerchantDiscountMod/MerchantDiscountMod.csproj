@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project=".\local.props" Condition="Exists('.\local.props')" />
+  <Import Project=".\Sts2PathDiscovery.props" />
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+    <RootNamespace>MerchantDiscountMod</RootNamespace>
+    <AssemblyName>RobMerchant</AssemblyName>
+    <Description>Offline-buildable Rob the Merchant gameplay mod for Slay the Spire 2.</Description>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EnableSts2References Condition="'$(EnableSts2References)' == ''">false</EnableSts2References>
+    <Sts2ReferenceTargetFramework Condition="'$(Sts2ReferenceTargetFramework)' == ''">net9.0</Sts2ReferenceTargetFramework>
+    <RequireSts2LocalPaths Condition="'$(RequireSts2LocalPaths)' == ''">false</RequireSts2LocalPaths>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(EnableSts2References)' == 'true' and '$(TargetFramework)' == '$(Sts2ReferenceTargetFramework)' and Exists('$(Sts2DataDir)')">
+    <Reference Include="0Harmony">
+      <HintPath>$(Sts2DataDir)/0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="sts2">
+      <HintPath>$(Sts2DataDir)/sts2.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="RobMerchant.json" />
+    <None Include="Sts2PathDiscovery.props" />
+    <None Include="local.props.template" />
+    <None Include="project.godot" />
+    <None Include="export_presets.cfg" />
+  </ItemGroup>
+
+  <Target Name="ValidateSts2LocalPaths">
+    <Message Text="Sts2Path=$(Sts2Path)" Importance="high" />
+    <Message Text="Sts2DataDir=$(Sts2DataDir)" Importance="high" />
+    <Message Text="ModsPath=$(ModsPath)" Importance="high" />
+    <Warning Text="Slay the Spire 2 data directory not found at '$(Sts2DataDir)'. Set Sts2Path in local.props or pass /p:Sts2Path=... when you are ready to wire real game references."
+             Condition="'$(RequireSts2LocalPaths)' != 'true' and !Exists('$(Sts2DataDir)')" />
+    <Error Text="Slay the Spire 2 data directory not found at '$(Sts2DataDir)'."
+           Condition="'$(RequireSts2LocalPaths)' == 'true' and !Exists('$(Sts2DataDir)')" />
+    <Error Text="Slay the Spire 2 mods directory not found at '$(ModsPath)'."
+           Condition="'$(RequireSts2LocalPaths)' == 'true' and !Exists('$(ModsPath)')" />
+  </Target>
+
+  <Target Name="CopyModPackageToModsFolder" DependsOnTargets="Build;ValidateSts2LocalPaths">
+    <Error Text="Cannot copy mod package because ModsPath does not exist: '$(ModsPath)'."
+           Condition="!Exists('$(ModsPath)')" />
+    <MakeDir Directories="$(ModsPath)$(AssemblyName)" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ModsPath)$(AssemblyName)/" />
+    <Copy SourceFiles="$(AssemblyName).json" DestinationFolder="$(ModsPath)$(AssemblyName)/" />
+    <Message Text="Copied $(TargetFileName) and $(AssemblyName).json to $(ModsPath)$(AssemblyName)/" Importance="high" />
+  </Target>
+</Project>

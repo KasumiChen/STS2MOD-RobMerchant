@@ -1,0 +1,14 @@
+<Project>
+  <PropertyGroup>
+    <!-- Override this if automatic Steam path discovery does not find your local install. -->
+    <Sts2Path>/absolute/path/to/steamapps/common/Slay the Spire 2</Sts2Path>
+
+    <!-- Optional overrides when your platform or install layout differs from the public template defaults. -->
+    <!-- <Sts2DataDir>$(Sts2Path)/data_sts2_linuxbsd_x86_64</Sts2DataDir> -->
+    <!-- <ModsPath>$(Sts2Path)/mods/</ModsPath> -->
+
+    <!-- STS2 assemblies currently target .NET 9. Keep direct references off while this scaffold builds on net8.0. -->
+    <EnableSts2References>false</EnableSts2References>
+    <Sts2ReferenceTargetFramework>net9.0</Sts2ReferenceTargetFramework>
+  </PropertyGroup>
+</Project>
