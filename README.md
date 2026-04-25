@@ -29,7 +29,7 @@ Slay the Spire 2/
 ## Notes
 
 - This release is intended for singleplayer.
-- Multiplayer behavior is not currently supported or synchronized by the mod.
+- Multiplayer behavior not tested.
 - The mod changes shop gameplay and can make a run much more volatile.
 
 ## Credits
@@ -71,7 +71,7 @@ Slay the Spire 2/
 ## 注意事项
 
 - 当前版本面向单人模式。
-- 多人模式下的状态同步尚未支持。
+- 多人模式下行为未测试。
 - 这个 Mod 会显著改变商店风险和收益。
 
 ## 致谢
