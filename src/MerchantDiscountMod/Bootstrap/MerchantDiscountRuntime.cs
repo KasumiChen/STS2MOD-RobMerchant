@@ -106,6 +106,12 @@ public sealed class MerchantDiscountRuntime
         interactionController.OnDiscountCanceled();
     }
 
+    public void StartSynchronizedMerchantBattle()
+    {
+        runState.MarkChallengePending();
+        interactionState.MarkCombatStarted();
+    }
+
     public ShopStateSnapshot ResolveMerchantBattle(MerchantBattleResult result)
     {
         battleOutcomeHandler.Apply(result);

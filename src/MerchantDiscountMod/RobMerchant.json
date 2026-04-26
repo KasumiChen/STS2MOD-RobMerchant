@@ -3,7 +3,7 @@
   "name": "Rob the Merchant",
   "author": "kasumi",
   "description": "Adds a risky shop-robbing encounter after repeatedly pressuring the merchant.",
-  "version": "v0.1.0",
+  "version": "v0.1.3-multiplayer-vote-fix",
   "has_pck": false,
   "has_dll": true,
   "dependencies": [],

@@ -39,6 +39,21 @@ public sealed class MerchantDiscountRuntimeTests
     }
 
     [Fact]
+    public void SynchronizedMerchantBattleVictoryAppliesForRemotePlayersWithoutPrompt()
+    {
+        var runtime = new MerchantDiscountRuntime();
+        runtime.EnterShop();
+
+        runtime.StartSynchronizedMerchantBattle();
+        var shopState = runtime.ResolveMerchantBattle(MerchantBattleResult.Victory);
+
+        Assert.False(shopState.MerchantVisible);
+        Assert.True(shopState.InventoryAvailable);
+        Assert.False(shopState.RestockAllowed);
+        Assert.True(shopState.PricesAreZero);
+    }
+
+    [Fact]
     public void FutureShopsAfterMerchantVictoryContainNoMerchantAndNoGoods()
     {
         var runtime = new MerchantDiscountRuntime();

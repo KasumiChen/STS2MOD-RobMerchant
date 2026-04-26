@@ -32,6 +32,7 @@ public sealed class MerchantShopEventBridge
     public void OnShopEntered()
     {
         MerchantDiscountDiagnostics.Info("Shop entered.");
+        TryPrepareMultiplayerVoteBridge();
         shopStateRenderer.Render(runtime.EnterShop());
     }
 
@@ -73,6 +74,12 @@ public sealed class MerchantShopEventBridge
         runStatePersistence.SaveRunState();
     }
 
+    public void OnSynchronizedMerchantBattleStarted()
+    {
+        runtime.StartSynchronizedMerchantBattle();
+        runStatePersistence.SaveRunState();
+    }
+
     public void RefreshShopPresentation()
     {
         shopStateRenderer.Render(runtime.GetShopStateSnapshot());
@@ -100,6 +107,29 @@ public sealed class MerchantShopEventBridge
         if (response.BattleRequest is not null)
         {
             shopCombatPort.Launch(response.BattleRequest);
+        }
+    }
+
+    private static void TryPrepareMultiplayerVoteBridge()
+    {
+        var bridgeType = typeof(MerchantShopEventBridge).Assembly.GetType(
+            "MerchantDiscountMod.Integration.MerchantCombatMultiplayerBridge",
+            throwOnError: false);
+        var prepare = bridgeType?.GetMethod(
+            "PrepareForMultiplayerRun",
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        try
+        {
+            prepare?.Invoke(null, []);
+        }
+        catch (ArgumentException exception)
+        {
+            MerchantDiscountDiagnostics.Warn($"Merchant combat multiplayer vote bridge preparation failed: {exception.Message}");
+        }
+        catch (System.Reflection.TargetInvocationException exception)
+        {
+            MerchantDiscountDiagnostics.Warn(
+                $"Merchant combat multiplayer vote bridge preparation failed: {exception.InnerException?.Message ?? exception.Message}");
         }
     }
 }

@@ -183,6 +183,36 @@ public sealed class MerchantDiscountLiveBootstrap
         MerchantDiscountDiagnostics.Info("Merchant room resumed into free inventory after merchant combat victory.");
     }
 
+    internal static async Task LaunchMerchantCombatFromSynchronizedAction(object? runState)
+    {
+        var bootstrap = activeBootstrap
+            ?? throw new InvalidOperationException("Cannot launch synchronized merchant combat before the mod is initialized.");
+        if (runState is null)
+        {
+            throw new InvalidOperationException("Cannot launch synchronized merchant combat without a run state.");
+        }
+
+        if (bootstrap.ShopContext.MerchantCombatLaunchInProgress)
+        {
+            MerchantDiscountDiagnostics.Warn("Ignoring duplicate synchronized merchant combat launch request.");
+            return;
+        }
+
+        MerchantDiscountDiagnostics.Info("Launching synchronized multiplayer merchant combat.");
+        bootstrap.ShopContext.CaptureRunState(runState);
+        bootstrap.Host.ShopBridge.OnSynchronizedMerchantBattleStarted();
+
+        var combatRoom = ReflectionShopCombatPort.CreateSts2CombatRoom(MerchantBattleRequest.Placeholder(), runState)
+            ?? throw new InvalidOperationException("Could not create synchronized merchant combat room.");
+        bootstrap.ShopContext.CaptureMerchantCombatRoom(combatRoom);
+
+        var transitionTask = ReflectionShopCombatPort.EnterSts2CombatRoomAsync(combatRoom, fadeToBlack: true)
+            ?? throw new InvalidOperationException("Could not enter synchronized merchant combat room.");
+        await transitionTask;
+
+        MerchantDiscountDiagnostics.Info("Synchronized multiplayer merchant combat transition completed.");
+    }
+
     private static void OnMerchantRoomExited()
     {
         MerchantDiscountDiagnostics.Info("Merchant room exited.");

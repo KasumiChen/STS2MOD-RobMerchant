@@ -92,6 +92,23 @@ public sealed class MerchantShopEventBridgeTests
         Assert.True(renderer.LastSnapshot.PricesAreZero);
     }
 
+    [Fact]
+    public void SynchronizedMerchantBattleStartPersistsPendingState()
+    {
+        var runtime = new MerchantDiscountRuntime();
+        var persistence = new RecordingRunStatePersistence();
+        var bridge = CreateBridge(
+            runtime,
+            new RecordingShopStateRenderer(),
+            persistence: persistence);
+
+        bridge.OnShopEntered();
+        bridge.OnSynchronizedMerchantBattleStarted();
+
+        Assert.True(runtime.RunState.MerchantChallengePending);
+        Assert.Equal(1, persistence.SaveCallCount);
+    }
+
     private static MerchantShopEventBridge CreateBridge(
         MerchantDiscountRuntime runtime,
         RecordingShopStateRenderer renderer,

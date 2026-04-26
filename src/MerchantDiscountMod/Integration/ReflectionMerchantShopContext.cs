@@ -17,6 +17,8 @@ public sealed class ReflectionMerchantShopContext
 
     public object? CurrentMerchantCombatRoom => currentMerchantCombatRoom;
 
+    public bool MerchantCombatLaunchInProgress => currentMerchantCombatRoom is not null;
+
     public string? LastMerchantDialogueLine { get; private set; }
 
     public DiscountPromptRequest? PendingPrompt { get; private set; }

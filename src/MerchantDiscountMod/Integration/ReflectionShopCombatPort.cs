@@ -17,27 +17,33 @@ public sealed class ReflectionShopCombatPort : IShopCombatPort
     private readonly ReflectionMerchantShopContext context;
     private readonly Func<MerchantBattleRequest, object?, object?> combatRoomFactory;
     private readonly Func<object, object?, bool> combatRoomLauncher;
+    private readonly Func<bool> isMultiplayerRun;
+    private readonly Func<MerchantBattleRequest, object?, bool> multiplayerCombatLauncher;
 
     public ReflectionShopCombatPort(ReflectionMerchantShopContext context)
-        : this(context, CreateSts2CombatRoom, LaunchSts2CombatRoom)
+        : this(context, CreateSts2CombatRoom, LaunchSts2CombatRoom, IsCurrentRunMultiplayer, TryRequestSynchronizedMultiplayerCombat)
     {
     }
 
     public ReflectionShopCombatPort(
         ReflectionMerchantShopContext context,
         Func<MerchantBattleRequest, object?, object?> combatRoomFactory)
-        : this(context, combatRoomFactory, PushCombatRoomOntoRunState)
+        : this(context, combatRoomFactory, PushCombatRoomOntoRunState, () => false, (_, _) => false)
     {
     }
 
-    private ReflectionShopCombatPort(
+    public ReflectionShopCombatPort(
         ReflectionMerchantShopContext context,
         Func<MerchantBattleRequest, object?, object?> combatRoomFactory,
-        Func<object, object?, bool> combatRoomLauncher)
+        Func<object, object?, bool> combatRoomLauncher,
+        Func<bool> isMultiplayerRun,
+        Func<MerchantBattleRequest, object?, bool> multiplayerCombatLauncher)
     {
         this.context = context;
         this.combatRoomFactory = combatRoomFactory;
         this.combatRoomLauncher = combatRoomLauncher;
+        this.isMultiplayerRun = isMultiplayerRun;
+        this.multiplayerCombatLauncher = multiplayerCombatLauncher;
     }
 
     public void Launch(MerchantBattleRequest request)
@@ -48,6 +54,17 @@ public sealed class ReflectionShopCombatPort : IShopCombatPort
         if (runState is null)
         {
             ThrowLaunchFailure("No captured run state is available for merchant combat launch.");
+        }
+
+        if (isMultiplayerRun())
+        {
+            if (!multiplayerCombatLauncher(request, runState))
+            {
+                ThrowLaunchFailure("Could not request synchronized multiplayer merchant combat.");
+            }
+
+            MerchantDiscountDiagnostics.Info("Synchronized multiplayer merchant combat launch requested.");
+            return;
         }
 
         var combatRoom = combatRoomFactory(request, runState);
@@ -68,7 +85,63 @@ public sealed class ReflectionShopCombatPort : IShopCombatPort
     private static bool PushCombatRoomOntoRunState(object combatRoom, object? runState) =>
         runState is not null && ReflectionMemberAccess.TryInvoke(runState, "PushRoom", out _, combatRoom);
 
-    private static bool LaunchSts2CombatRoom(object combatRoom, object? _)
+    private static bool IsCurrentRunMultiplayer()
+    {
+        var runManagerType = FindType(RunManagerTypeName);
+        var runManager = runManagerType?
+            .GetProperty("Instance", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)?
+            .GetValue(null);
+        var netService = runManager is null ? null : ReflectionMemberAccess.GetPropertyValue(runManager, "NetService");
+        var netType = netService is null ? null : ReflectionMemberAccess.GetPropertyValue(netService, "Type");
+        return netType?.ToString() is "Host" or "Client";
+    }
+
+    private static bool TryRequestSynchronizedMultiplayerCombat(MerchantBattleRequest request, object? runState)
+    {
+        var bridgeType = typeof(ReflectionShopCombatPort).Assembly.GetType(
+            "MerchantDiscountMod.Integration.MerchantCombatMultiplayerBridge",
+            throwOnError: false);
+        var requestLaunch = bridgeType?.GetMethod(
+            "RequestLaunch",
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+        if (requestLaunch is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            return requestLaunch.Invoke(null, [request, runState]) is true;
+        }
+        catch (ArgumentException exception)
+        {
+            throw new InvalidOperationException("Could not invoke multiplayer merchant combat bridge.", exception);
+        }
+        catch (MemberAccessException exception)
+        {
+            throw new InvalidOperationException("Could not access multiplayer merchant combat bridge.", exception);
+        }
+        catch (TargetInvocationException exception)
+        {
+            throw new InvalidOperationException(
+                "Multiplayer merchant combat bridge failed.",
+                exception.InnerException ?? exception);
+        }
+    }
+
+    internal static bool LaunchSts2CombatRoom(object combatRoom, object? _)
+    {
+        var transitionTask = EnterSts2CombatRoomAsync(combatRoom, fadeToBlack: true);
+        if (transitionTask is null)
+        {
+            return false;
+        }
+
+        ObserveCombatTransition(transitionTask);
+        return true;
+    }
+
+    internal static Task? EnterSts2CombatRoomAsync(object combatRoom, bool fadeToBlack)
     {
         var runManagerType = FindType(RunManagerTypeName);
         var runManager = runManagerType?
@@ -76,13 +149,28 @@ public sealed class ReflectionShopCombatPort : IShopCombatPort
             .GetValue(null);
         if (runManager is null)
         {
-            return false;
+            return null;
         }
 
-        return InvokeEnterRoomWithoutExitingCurrentRoom(runManager, combatRoom, fadeToBlack: true);
+        return InvokeEnterRoomWithoutExitingCurrentRoomTask(runManager, combatRoom, fadeToBlack);
     }
 
     private static bool InvokeEnterRoomWithoutExitingCurrentRoom(
+        object runManager,
+        object combatRoom,
+        bool fadeToBlack)
+    {
+        var transitionTask = InvokeEnterRoomWithoutExitingCurrentRoomTask(runManager, combatRoom, fadeToBlack);
+        if (transitionTask is null)
+        {
+            return false;
+        }
+
+        ObserveCombatTransition(transitionTask);
+        return true;
+    }
+
+    private static Task? InvokeEnterRoomWithoutExitingCurrentRoomTask(
         object runManager,
         object combatRoom,
         bool fadeToBlack)
@@ -101,14 +189,7 @@ public sealed class ReflectionShopCombatPort : IShopCombatPort
 
         try
         {
-            var transitionTask = enterRoom?.Invoke(runManager, [combatRoom, fadeToBlack]) as Task;
-            if (transitionTask is null)
-            {
-                return false;
-            }
-
-            ObserveCombatTransition(transitionTask);
-            return true;
+            return enterRoom?.Invoke(runManager, [combatRoom, fadeToBlack]) as Task;
         }
         catch (ArgumentException exception)
         {
@@ -143,7 +224,7 @@ public sealed class ReflectionShopCombatPort : IShopCombatPort
         });
     }
 
-    private static object? CreateSts2CombatRoom(MerchantBattleRequest request, object? runState)
+    internal static object? CreateSts2CombatRoom(MerchantBattleRequest request, object? runState)
     {
         _ = request;
         if (runState is null)

@@ -161,6 +161,39 @@ public sealed class ReflectionLivePortTests
     }
 
     [Fact]
+    public void CombatPortRequestsSynchronizedLaunchForMultiplayerRuns()
+    {
+        var runState = new FakeRunState();
+        var context = new ReflectionMerchantShopContext();
+        var directFactoryCalls = 0;
+        MerchantBattleRequest? synchronizedRequest = null;
+        object? synchronizedRunState = null;
+        var port = new ReflectionShopCombatPort(
+            context,
+            (_, _) =>
+            {
+                directFactoryCalls += 1;
+                return new FakeCombatRoom(runState);
+            },
+            (_, _) => throw new InvalidOperationException("Direct combat launch should not be used in multiplayer."),
+            isMultiplayerRun: () => true,
+            multiplayerCombatLauncher: (request, capturedRunState) =>
+            {
+                synchronizedRequest = request;
+                synchronizedRunState = capturedRunState;
+                return true;
+            });
+
+        context.CaptureRunState(runState);
+        port.Launch(MerchantBattleRequest.Placeholder());
+
+        Assert.Equal(0, directFactoryCalls);
+        Assert.Equal("merchant_discount_placeholder", synchronizedRequest?.EncounterId);
+        Assert.Same(runState, synchronizedRunState);
+        Assert.Null(context.CurrentMerchantCombatRoom);
+    }
+
+    [Fact]
     public void CombatPortResolvesMutableEncounterThroughModelDbAccessor()
     {
         var combatPortType = typeof(ReflectionShopCombatPort);
@@ -226,6 +259,22 @@ public sealed class ReflectionLivePortTests
         Assert.False(context.ConsumeMerchantCombatResume(unrelatedRoom));
         Assert.True(context.ConsumeMerchantCombatResume(merchantCombatRoom));
         Assert.False(context.ConsumeMerchantCombatResume(merchantCombatRoom));
+    }
+
+    [Fact]
+    public void ShopContextReportsWhenMerchantCombatLaunchIsAlreadyInProgress()
+    {
+        var context = new ReflectionMerchantShopContext();
+
+        Assert.False(context.MerchantCombatLaunchInProgress);
+
+        context.CaptureMerchantCombatRoom(new object());
+
+        Assert.True(context.MerchantCombatLaunchInProgress);
+
+        context.ClearMerchantCombatRoom();
+
+        Assert.False(context.MerchantCombatLaunchInProgress);
     }
 
     [Fact]
