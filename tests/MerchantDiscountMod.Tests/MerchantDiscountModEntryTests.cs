@@ -25,6 +25,6 @@ public sealed class MerchantDiscountModEntryTests
         Assert.Equal("RobMerchant", MerchantDiscountModInfo.ModId);
         Assert.Equal("Rob the Merchant", MerchantDiscountModInfo.DisplayName);
         Assert.Equal("RobMerchant.json", MerchantDiscountModInfo.ManifestFileName);
-        Assert.Equal("multiplayer-vote-fix-v0.1.3", MerchantDiscountModInfo.BuildStamp);
+        Assert.Equal("inventory-preserve-fix-v0.1.4", MerchantDiscountModInfo.BuildStamp);
     }
 }

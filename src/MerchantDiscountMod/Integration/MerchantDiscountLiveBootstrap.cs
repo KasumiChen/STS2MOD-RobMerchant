@@ -7,6 +7,11 @@ namespace MerchantDiscountMod.Integration;
 
 public sealed class MerchantDiscountLiveBootstrap
 {
+    private const string PreloadManagerTypeName = "MegaCrit.Sts2.Core.Assets.PreloadManager";
+    private const string NMerchantRoomTypeName = "MegaCrit.Sts2.Core.Nodes.Rooms.NMerchantRoom";
+    private const string NRunTypeName = "MegaCrit.Sts2.Core.Nodes.NRun";
+    private const string HookTypeName = "MegaCrit.Sts2.Core.Hooks.Hook";
+
     private static readonly object SyncRoot = new();
     private static MerchantDiscountLiveBootstrap? activeBootstrap;
 
@@ -162,14 +167,12 @@ public sealed class MerchantDiscountLiveBootstrap
         MerchantDiscountDiagnostics.Info("Resuming merchant room after merchant combat victory.");
         bootstrap.ShopContext.CaptureRunState(runState);
 
-        var enterResult = ReflectionMemberAccess.InvokeRequired(merchantRoom, "EnterInternal", runState, false);
-        if (enterResult is not Task enterTask)
+        if (!bootstrap.ShopContext.TryRestorePreservedMerchantInventory(merchantRoom))
         {
-            throw new InvalidOperationException(
-                $"{merchantRoom.GetType().FullName}.EnterInternal did not return a Task.");
+            throw new InvalidOperationException("Cannot resume merchant room after combat because the original merchant inventory was not preserved.");
         }
 
-        await enterTask;
+        await RecreateMerchantRoomNodeAfterMerchantCombat(bootstrap, merchantRoom, runState);
 
         var merchantRoomNode = bootstrap.ShopContext.CurrentMerchantRoom
             ?? throw new InvalidOperationException("Merchant room resume did not produce an NMerchantRoom instance.");
@@ -180,7 +183,136 @@ public sealed class MerchantDiscountLiveBootstrap
         }
 
         bootstrap.Host.ShopBridge.RefreshShopPresentation();
+        bootstrap.ShopContext.ClearPreservedMerchantInventory();
         MerchantDiscountDiagnostics.Info("Merchant room resumed into free inventory after merchant combat victory.");
+    }
+
+    private static async Task RecreateMerchantRoomNodeAfterMerchantCombat(
+        MerchantDiscountLiveBootstrap bootstrap,
+        object merchantRoom,
+        object runState)
+    {
+        await LoadMerchantRoomAssets();
+
+        var merchantRoomNode = CreateMerchantRoomNode(merchantRoom, runState)
+            ?? throw new InvalidOperationException("Could not create NMerchantRoom while resuming merchant room after combat.");
+        SetCurrentRunRoom(merchantRoomNode);
+        bootstrap.ShopContext.CaptureMerchantRoom(merchantRoomNode);
+
+        var afterRoomEnteredResult = InvokeStaticRequired(
+            HookTypeName,
+            "AfterRoomEntered",
+            runState,
+            merchantRoom);
+        if (afterRoomEnteredResult is Task afterRoomEnteredTask)
+        {
+            await afterRoomEnteredTask;
+        }
+    }
+
+    private static async Task LoadMerchantRoomAssets()
+    {
+        var result = InvokeStaticRequired(PreloadManagerTypeName, "LoadRoomMerchantAssets");
+        if (result is Task task)
+        {
+            await task;
+        }
+    }
+
+    private static object? CreateMerchantRoomNode(object merchantRoom, object runState)
+    {
+        var nMerchantRoomType = FindType(NMerchantRoomTypeName)
+            ?? throw new InvalidOperationException($"Could not resolve {NMerchantRoomTypeName}.");
+        var players = ReflectionMemberAccess.GetPropertyValue(runState, "Players")
+            ?? throw new InvalidOperationException($"Run state {runState.GetType().FullName} does not expose Players.");
+        var create = nMerchantRoomType
+            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+            .FirstOrDefault(method =>
+            {
+                var parameters = method.GetParameters();
+                return method.Name == "Create"
+                    && parameters.Length == 2
+                    && parameters[0].ParameterType.IsInstanceOfType(merchantRoom)
+                    && parameters[1].ParameterType.IsInstanceOfType(players);
+            })
+            ?? throw new MissingMethodException(nMerchantRoomType.FullName, "Create");
+
+        return InvokeMethodRequired(create, null, merchantRoom, players);
+    }
+
+    private static void SetCurrentRunRoom(object roomNode)
+    {
+        var nRunType = FindType(NRunTypeName)
+            ?? throw new InvalidOperationException($"Could not resolve {NRunTypeName}.");
+        var nRun = nRunType
+            .GetProperty("Instance", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)?
+            .GetValue(null)
+            ?? throw new InvalidOperationException($"{NRunTypeName}.Instance is not available.");
+        var setCurrentRoom = nRun
+            .GetType()
+            .GetMethods(ReflectionMemberAccess.InstanceMemberFlags)
+            .FirstOrDefault(method =>
+            {
+                var parameters = method.GetParameters();
+                return method.Name == "SetCurrentRoom"
+                    && parameters.Length == 1
+                    && parameters[0].ParameterType.IsInstanceOfType(roomNode);
+            })
+            ?? throw new MissingMethodException(nRun.GetType().FullName, "SetCurrentRoom");
+
+        InvokeMethodRequired(setCurrentRoom, nRun, roomNode);
+    }
+
+    private static object? InvokeStaticRequired(string typeName, string methodName, params object?[] args)
+    {
+        var type = FindType(typeName)
+            ?? throw new InvalidOperationException($"Could not resolve {typeName}.");
+        var method = type
+            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+            .FirstOrDefault(candidate =>
+            {
+                var parameters = candidate.GetParameters();
+                if (candidate.Name != methodName || parameters.Length != args.Length)
+                {
+                    return false;
+                }
+
+                for (var index = 0; index < parameters.Length; index += 1)
+                {
+                    var arg = args[index];
+                    if (arg is not null && !parameters[index].ParameterType.IsInstanceOfType(arg))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            })
+            ?? throw new MissingMethodException(type.FullName, methodName);
+
+        return InvokeMethodRequired(method, null, args);
+    }
+
+    private static object? InvokeMethodRequired(MethodInfo method, object? target, params object?[] args)
+    {
+        try
+        {
+            return method.Invoke(target, args);
+        }
+        catch (ArgumentException exception)
+        {
+            throw new InvalidOperationException($"Could not invoke {method.DeclaringType?.FullName}.{method.Name}.", exception);
+        }
+        catch (MemberAccessException exception)
+        {
+            throw new InvalidOperationException($"Could not access {method.DeclaringType?.FullName}.{method.Name}.", exception);
+        }
+        catch (TargetInvocationException exception)
+        {
+            throw new InvalidOperationException(
+                $"{method.DeclaringType?.FullName}.{method.Name} failed.",
+                exception.InnerException ?? exception);
+        }
     }
 
     internal static async Task LaunchMerchantCombatFromSynchronizedAction(object? runState)
@@ -200,6 +332,11 @@ public sealed class MerchantDiscountLiveBootstrap
 
         MerchantDiscountDiagnostics.Info("Launching synchronized multiplayer merchant combat.");
         bootstrap.ShopContext.CaptureRunState(runState);
+        if (!bootstrap.ShopContext.CaptureCurrentMerchantInventory())
+        {
+            throw new InvalidOperationException("Cannot launch synchronized merchant combat because no merchant inventory is available to preserve.");
+        }
+
         bootstrap.Host.ShopBridge.OnSynchronizedMerchantBattleStarted();
 
         var combatRoom = ReflectionShopCombatPort.CreateSts2CombatRoom(MerchantBattleRequest.Placeholder(), runState)
@@ -211,6 +348,20 @@ public sealed class MerchantDiscountLiveBootstrap
         await transitionTask;
 
         MerchantDiscountDiagnostics.Info("Synchronized multiplayer merchant combat transition completed.");
+    }
+
+    private static Type? FindType(string fullName)
+    {
+        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            var type = assembly.GetType(fullName, throwOnError: false);
+            if (type is not null)
+            {
+                return type;
+            }
+        }
+
+        return null;
     }
 
     private static void OnMerchantRoomExited()

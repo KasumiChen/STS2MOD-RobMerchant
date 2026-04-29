@@ -10,6 +10,7 @@ public sealed class ReflectionMerchantShopContext
     private object? currentMerchantRoom;
     private object? currentMerchantCombatRoom;
     private object? pendingMerchantCombatResumeRoom;
+    private object? preservedMerchantInventory;
 
     public object? CurrentRunState => currentRunState;
 
@@ -18,6 +19,8 @@ public sealed class ReflectionMerchantShopContext
     public object? CurrentMerchantCombatRoom => currentMerchantCombatRoom;
 
     public bool MerchantCombatLaunchInProgress => currentMerchantCombatRoom is not null;
+
+    public bool HasPreservedMerchantInventory => preservedMerchantInventory is not null;
 
     public string? LastMerchantDialogueLine { get; private set; }
 
@@ -68,6 +71,39 @@ public sealed class ReflectionMerchantShopContext
         return true;
     }
 
+    public bool CaptureCurrentMerchantInventory()
+    {
+        var inventory = TryGetCurrentMerchantInventory();
+        if (inventory is null)
+        {
+            preservedMerchantInventory = null;
+            return false;
+        }
+
+        preservedMerchantInventory = inventory;
+        return true;
+    }
+
+    public bool TryRestorePreservedMerchantInventory(object merchantRoom)
+    {
+        if (preservedMerchantInventory is null)
+        {
+            return false;
+        }
+
+        if (TrySetMerchantInventory(merchantRoom, preservedMerchantInventory))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    public void ClearPreservedMerchantInventory()
+    {
+        preservedMerchantInventory = null;
+    }
+
     public void RecordMerchantDialogueLine(string line)
     {
         LastMerchantDialogueLine = line;
@@ -91,5 +127,71 @@ public sealed class ReflectionMerchantShopContext
     public void SaveRunStateSnapshot(MerchantRunStateSnapshot snapshot)
     {
         SavedRunStateSnapshot = snapshot;
+    }
+
+    private object? TryGetCurrentMerchantInventory()
+    {
+        if (currentMerchantRoom is null)
+        {
+            return null;
+        }
+
+        var roomModel = ReflectionMemberAccess.GetPropertyValue(currentMerchantRoom, "Room");
+        var roomModelInventory = roomModel is null
+            ? null
+            : ReflectionMemberAccess.GetPropertyValue(roomModel, "Inventory");
+        if (roomModelInventory is not null)
+        {
+            return roomModelInventory;
+        }
+
+        var inventoryNode = ReflectionMemberAccess.GetPropertyValue(currentMerchantRoom, "Inventory");
+        var inventoryNodeInventory = inventoryNode is null
+            ? null
+            : ReflectionMemberAccess.GetPropertyValue(inventoryNode, "Inventory");
+        if (inventoryNodeInventory is not null)
+        {
+            return inventoryNodeInventory;
+        }
+
+        return ReflectionMemberAccess.GetPropertyValue(currentMerchantRoom, "Inventory");
+    }
+
+    private static bool TrySetMerchantInventory(object merchantRoom, object inventory)
+    {
+        var property = merchantRoom
+            .GetType()
+            .GetProperty("Inventory", ReflectionMemberAccess.InstanceMemberFlags);
+        if (property is not null && property.GetIndexParameters().Length == 0)
+        {
+            ReflectionMemberAccess.TrySetValue(merchantRoom, property, inventory);
+            if (ReferenceEquals(ReflectionMemberAccess.GetPropertyValue(merchantRoom, "Inventory"), inventory))
+            {
+                return true;
+            }
+        }
+
+        var backingField = merchantRoom
+            .GetType()
+            .GetField("<Inventory>k__BackingField", ReflectionMemberAccess.InstanceMemberFlags);
+        if (backingField is not null)
+        {
+            ReflectionMemberAccess.TrySetValue(merchantRoom, backingField, inventory);
+            if (ReferenceEquals(ReflectionMemberAccess.GetPropertyValue(merchantRoom, "Inventory"), inventory))
+            {
+                return true;
+            }
+        }
+
+        var field = merchantRoom
+            .GetType()
+            .GetField("Inventory", ReflectionMemberAccess.InstanceMemberFlags);
+        if (field is not null)
+        {
+            ReflectionMemberAccess.TrySetValue(merchantRoom, field, inventory);
+            return ReferenceEquals(field.GetValue(merchantRoom), inventory);
+        }
+
+        return false;
     }
 }

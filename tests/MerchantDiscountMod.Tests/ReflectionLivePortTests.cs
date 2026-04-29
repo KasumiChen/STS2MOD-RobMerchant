@@ -152,6 +152,7 @@ public sealed class ReflectionLivePortTests
             (_, capturedRunState) => new FakeCombatRoom(capturedRunState));
 
         context.CaptureRunState(runState);
+        context.CaptureMerchantRoom(new FakeMerchantRoomNode(new FakeMerchantRoomModel(new object())));
         port.Launch(MerchantBattleRequest.Placeholder());
 
         var pushedRoom = Assert.IsType<FakeCombatRoom>(runState.PushedRooms.Single());
@@ -185,6 +186,7 @@ public sealed class ReflectionLivePortTests
             });
 
         context.CaptureRunState(runState);
+        context.CaptureMerchantRoom(new FakeMerchantRoomNode(new FakeMerchantRoomModel(new object())));
         port.Launch(MerchantBattleRequest.Placeholder());
 
         Assert.Equal(0, directFactoryCalls);
@@ -228,23 +230,20 @@ public sealed class ReflectionLivePortTests
     }
 
     [Fact]
-    public async Task MerchantCombatResumeReentersMerchantRoomWithoutStackRestorationMode()
+    public void ShopContextRestoresCapturedMerchantInventoryAfterCombat()
     {
-        var bootstrap = MerchantDiscountMod.ModEntry.MerchantDiscountModEntry.CreateLiveBootstrap();
-        var resumeMethod = typeof(MerchantDiscountLiveBootstrap).GetMethod(
-            "ResumeMerchantRoomAfterMerchantCombat",
-            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
-        var merchantRoom = new FakeMerchantRoom();
-        var merchantRoomNode = new FakeResumableMerchantRoomNode();
-        var runState = new object();
+        var preservedInventory = new object();
+        var regeneratedInventory = new object();
+        var merchantRoomNode = new FakeMerchantRoomNode(new FakeMerchantRoomModel(preservedInventory));
+        var resumedMerchantRoom = new FakeMerchantRoomModel(regeneratedInventory);
+        var context = new ReflectionMerchantShopContext();
 
-        bootstrap.ShopContext.CaptureMerchantRoom(merchantRoomNode);
+        context.CaptureMerchantRoom(merchantRoomNode);
 
-        var task = Assert.IsAssignableFrom<Task>(resumeMethod?.Invoke(null, [bootstrap, merchantRoom, runState]));
-        await task;
+        Assert.True(context.CaptureCurrentMerchantInventory());
+        Assert.True(context.TryRestorePreservedMerchantInventory(resumedMerchantRoom));
 
-        Assert.Equal(false, merchantRoom.LastIsRestoringRoomStackBase);
-        Assert.Equal(1, merchantRoomNode.OpenInventoryCallCount);
+        Assert.Same(preservedInventory, resumedMerchantRoom.Inventory);
     }
 
     [Fact]
@@ -384,23 +383,24 @@ public sealed class ReflectionLivePortTests
     {
     }
 
-    private sealed class FakeMerchantRoom
+    private sealed class FakeMerchantRoomModel
     {
-        public bool? LastIsRestoringRoomStackBase { get; private set; }
-
-        public Task EnterInternal(object runState, bool isRestoringRoomStackBase)
+        public FakeMerchantRoomModel(object inventory)
         {
-            _ = runState;
-            LastIsRestoringRoomStackBase = isRestoringRoomStackBase;
-            return Task.CompletedTask;
+            Inventory = inventory;
         }
+
+        public object Inventory { get; private set; }
     }
 
-    private sealed class FakeResumableMerchantRoomNode
+    private sealed class FakeMerchantRoomNode
     {
-        public int OpenInventoryCallCount { get; private set; }
+        public FakeMerchantRoomNode(FakeMerchantRoomModel room)
+        {
+            Room = room;
+        }
 
-        public void OpenInventory() => OpenInventoryCallCount += 1;
+        public FakeMerchantRoomModel Room { get; }
     }
 
     private sealed class FakeModelDb

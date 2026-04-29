@@ -56,6 +56,11 @@ public sealed class ReflectionShopCombatPort : IShopCombatPort
             ThrowLaunchFailure("No captured run state is available for merchant combat launch.");
         }
 
+        if (!context.CaptureCurrentMerchantInventory())
+        {
+            ThrowLaunchFailure("No merchant inventory is available to preserve before merchant combat launch.");
+        }
+
         if (isMultiplayerRun())
         {
             if (!multiplayerCombatLauncher(request, runState))
