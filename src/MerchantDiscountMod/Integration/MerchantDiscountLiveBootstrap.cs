@@ -21,7 +21,7 @@ public sealed class MerchantDiscountLiveBootstrap
         ShopContext = shopContext;
         BindingPlan = Sts2BindingPlan.CreateConfirmed();
         VerifiedTargets = BindingPlan.DocumentedTargets
-            .Where(target => target.MethodName is "EnterInternal" or "Resume" or "Exit" or "OnMerchantOpened" or "Create" or "AfterRoomIsLoaded" or "OnTryPurchaseWrapper" or "InvokePurchaseFailed" or "RestockAfterPurchase")
+            .Where(target => target.MethodName is "EnterInternal" or "Resume" or "Exit" or "OnMerchantOpened" or "Create" or "AfterRoomIsLoaded" or "OnTryPurchaseWrapper" or "InvokePurchaseFailed" or "RestockAfterPurchase" or "StartNewSingleplayerRun" or "StartNewMultiplayerRun")
             .ToArray();
     }
 
@@ -85,6 +85,18 @@ public sealed class MerchantDiscountLiveBootstrap
                 harmonyMethodType,
                 VerifiedTargets.Single(target => target.DeclaringTypeName == "MegaCrit.Sts2.Core.Rooms.CombatRoom" && target.MethodName == "Exit"),
                 nameof(OnCombatRoomExited));
+            PatchPrefix(
+                harmony,
+                harmonyType,
+                harmonyMethodType,
+                VerifiedTargets.Single(target => target.MethodName == "StartNewSingleplayerRun"),
+                nameof(OnNewRunStarted));
+            PatchPrefix(
+                harmony,
+                harmonyType,
+                harmonyMethodType,
+                VerifiedTargets.Single(target => target.MethodName == "StartNewMultiplayerRun"),
+                nameof(OnNewRunStarted));
             MerchantDiscountDiagnostics.Info("Harmony patches applied.");
         }
     }
@@ -140,6 +152,12 @@ public sealed class MerchantDiscountLiveBootstrap
         MerchantDiscountDiagnostics.Info($"Merchant room entered runState={runState?.GetType().FullName ?? "<null>"}.");
         activeBootstrap?.ShopContext.CaptureRunState(runState);
         activeBootstrap?.Host.ShopBridge.OnShopEntered();
+    }
+
+    private static void OnNewRunStarted()
+    {
+        activeBootstrap?.ShopContext.CaptureRunState(null);
+        activeBootstrap?.Host.ShopBridge.OnNewRunStarted();
     }
 
     private static bool OnMerchantRoomResume(object? __instance, object? __0, object? __1, ref Task __result)

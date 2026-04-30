@@ -6,5 +6,5 @@ public static class MerchantDiscountModInfo
     public const string DisplayName = "Rob the Merchant";
     public const string ManifestFileName = "RobMerchant.json";
     public const string OfflineTargetFramework = "net8.0";
-    public const string BuildStamp = "inventory-preserve-fix-v0.1.4";
+    public const string BuildStamp = "new-run-reset-fix-v0.1.5";
 }

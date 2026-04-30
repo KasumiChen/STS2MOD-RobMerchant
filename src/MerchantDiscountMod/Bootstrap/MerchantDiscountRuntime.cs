@@ -65,6 +65,13 @@ public sealed class MerchantDiscountRuntime
         runState.ResetCurrentShopFlags();
     }
 
+    public void StartNewRun()
+    {
+        runState.ResetForNewRun();
+        interactionState.Reset();
+        shopInventoryState.ResetToDefaultShop();
+    }
+
     public MerchantInteractionResponse ClickMerchant()
     {
         if (!shopInventoryState.MerchantVisible)

@@ -27,6 +27,8 @@ public sealed class Sts2MerchantIntegrationTests
         Assert.Contains(bootstrap.VerifiedTargets, target => target.ToString() == "MegaCrit.Sts2.Core.Entities.Merchant.MerchantPotionEntry.RestockAfterPurchase(MegaCrit.Sts2.Core.Entities.Merchant.MerchantInventory)");
         Assert.Contains(bootstrap.VerifiedTargets, target => target.ToString() == "MegaCrit.Sts2.Core.Entities.Merchant.MerchantCardRemovalEntry.RestockAfterPurchase(MegaCrit.Sts2.Core.Entities.Merchant.MerchantInventory)");
         Assert.Contains(bootstrap.VerifiedTargets, target => target.ToString() == "MegaCrit.Sts2.Core.Rooms.CombatRoom.Exit(MegaCrit.Sts2.Core.Runs.IRunState)");
+        Assert.Contains(bootstrap.VerifiedTargets, target => target.MethodName == "StartNewSingleplayerRun");
+        Assert.Contains(bootstrap.VerifiedTargets, target => target.MethodName == "StartNewMultiplayerRun");
     }
 
     [Fact]
@@ -75,6 +77,8 @@ public sealed class Sts2MerchantIntegrationTests
         Assert.Contains(plan.DocumentedTargets, target => target.MethodName == "InvokePurchaseFailed");
         Assert.Contains(plan.DocumentedTargets, target => target.MethodName == "RestockAfterPurchase");
         Assert.Contains(plan.DocumentedTargets, target => target.DeclaringTypeName == "MegaCrit.Sts2.Core.Rooms.CombatRoom" && target.MethodName == "Exit");
+        Assert.Contains(plan.DocumentedTargets, target => target.MethodName == "StartNewSingleplayerRun");
+        Assert.Contains(plan.DocumentedTargets, target => target.MethodName == "StartNewMultiplayerRun");
     }
 
     private sealed class SampleHookTarget

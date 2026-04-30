@@ -36,6 +36,13 @@ public sealed class MerchantShopEventBridge
         shopStateRenderer.Render(runtime.EnterShop());
     }
 
+    public void OnNewRunStarted()
+    {
+        MerchantDiscountDiagnostics.Info("New run started; resetting merchant robbery state.");
+        runtime.StartNewRun();
+        runStatePersistence.SaveRunState();
+    }
+
     public void OnMerchantSelected()
     {
         var response = runtime.ClickMerchant();

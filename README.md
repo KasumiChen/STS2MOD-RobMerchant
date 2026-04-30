@@ -14,7 +14,7 @@ After robbing the merchant once, future shops in the same run are abandoned. The
 
 ## Installation
 
-1. Download `RobMerchant-v0.1.4-inventory-preserve-fix.zip` from the release.
+1. Download `RobMerchant-v0.1.5-new-run-reset-fix.zip` from the release.
 2. Extract it into your Slay the Spire 2 `mods` folder.
 3. The final layout should look like:
 
@@ -58,7 +58,7 @@ Rob the Merchant 是一个 Slay the Spire 2 玩法 Mod，给商店加入了一�
 
 ## 安装方式
 
-1. 在 release 页面下载 `RobMerchant-v0.1.4-inventory-preserve-fix.zip`。
+1. 在 release 页面下载 `RobMerchant-v0.1.5-new-run-reset-fix.zip`。
 2. 解压到 Slay the Spire 2 的 `mods` 文件夹。
 3. 最终目录应该像这样：
 

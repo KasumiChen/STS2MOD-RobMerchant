@@ -109,6 +109,28 @@ public sealed class MerchantShopEventBridgeTests
         Assert.Equal(1, persistence.SaveCallCount);
     }
 
+    [Fact]
+    public void StartingNewRunClearsMerchantDefeatStateFromPreviousRun()
+    {
+        var runtime = new MerchantDiscountRuntime();
+        var renderer = new RecordingShopStateRenderer();
+        var bridge = CreateBridge(runtime, renderer);
+
+        bridge.OnShopEntered();
+        runtime.StartSynchronizedMerchantBattle();
+        bridge.OnMerchantBattleResolved(MerchantBattleResult.Victory);
+        bridge.OnShopExited();
+
+        bridge.OnShopEntered();
+        Assert.False(renderer.LastSnapshot!.MerchantVisible);
+
+        bridge.OnNewRunStarted();
+        bridge.OnShopEntered();
+
+        Assert.True(renderer.LastSnapshot!.MerchantVisible);
+        Assert.True(renderer.LastSnapshot.InventoryAvailable);
+    }
+
     private static MerchantShopEventBridge CreateBridge(
         MerchantDiscountRuntime runtime,
         RecordingShopStateRenderer renderer,
